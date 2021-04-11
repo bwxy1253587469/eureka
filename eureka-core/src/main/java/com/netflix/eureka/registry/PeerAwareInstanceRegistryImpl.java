@@ -16,14 +16,6 @@
 
 package com.netflix.eureka.registry;
 
-import java.net.URI;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Timer;
-import java.util.TimerTask;
-
 import com.netflix.appinfo.AmazonInfo;
 import com.netflix.appinfo.AmazonInfo.MetaDataKey;
 import com.netflix.appinfo.ApplicationInfoManager;
@@ -36,18 +28,18 @@ import com.netflix.discovery.EurekaClient;
 import com.netflix.discovery.EurekaClientConfig;
 import com.netflix.discovery.shared.Application;
 import com.netflix.discovery.shared.Applications;
-import com.netflix.eureka.registry.rule.DownOrStartingRule;
-import com.netflix.eureka.registry.rule.FirstMatchWinsCompositeRule;
-import com.netflix.eureka.registry.rule.InstanceStatusOverrideRule;
-import com.netflix.eureka.registry.rule.LeaseExistsRule;
-import com.netflix.eureka.registry.rule.OverrideExistsRule;
-import com.netflix.eureka.resources.CurrentRequestVersion;
 import com.netflix.eureka.EurekaServerConfig;
 import com.netflix.eureka.Version;
 import com.netflix.eureka.cluster.PeerEurekaNode;
 import com.netflix.eureka.cluster.PeerEurekaNodes;
 import com.netflix.eureka.lease.Lease;
+import com.netflix.eureka.registry.rule.DownOrStartingRule;
+import com.netflix.eureka.registry.rule.FirstMatchWinsCompositeRule;
+import com.netflix.eureka.registry.rule.InstanceStatusOverrideRule;
+import com.netflix.eureka.registry.rule.LeaseExistsRule;
+import com.netflix.eureka.registry.rule.OverrideExistsRule;
 import com.netflix.eureka.resources.ASGResource.ASGStatus;
+import com.netflix.eureka.resources.CurrentRequestVersion;
 import com.netflix.eureka.resources.ServerCodecs;
 import com.netflix.eureka.util.MeasuredRate;
 import com.netflix.servo.DefaultMonitorRegistry;
@@ -59,6 +51,13 @@ import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import java.net.URI;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Timer;
+import java.util.TimerTask;
 
 /**
  * Handles replication of all operations to {@link AbstractInstanceRegistry} to peer
@@ -198,6 +197,8 @@ public class PeerAwareInstanceRegistryImpl extends AbstractInstanceRegistry impl
     }
 
     /**
+     * 从对等eureka节点填充注册表信息。如果通信失败，此操作将故障转移到其他节点，直到列表用尽。
+     *
      * Populates the registry information from a peer eureka node. This
      * operation fails over to other nodes until the list is exhausted if the
      * communication fails.

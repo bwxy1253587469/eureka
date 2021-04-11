@@ -16,43 +16,6 @@
 
 package com.netflix.discovery;
 
-import static com.netflix.discovery.EurekaClientNames.METRIC_REGISTRATION_PREFIX;
-import static com.netflix.discovery.EurekaClientNames.METRIC_REGISTRY_PREFIX;
-
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Set;
-import java.util.TreeMap;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArraySet;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.SynchronousQueue;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
-
-import javax.annotation.Nullable;
-import javax.annotation.PreDestroy;
-import javax.inject.Provider;
-import javax.inject.Singleton;
-import javax.ws.rs.core.Response.Status;
-
-import com.netflix.discovery.shared.transport.jersey.Jersey1DiscoveryClientOptionalArgs;
-import com.netflix.discovery.shared.transport.jersey.Jersey1TransportClientFactories;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Strings;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
@@ -76,12 +39,47 @@ import com.netflix.discovery.shared.transport.EurekaHttpResponse;
 import com.netflix.discovery.shared.transport.EurekaTransportConfig;
 import com.netflix.discovery.shared.transport.TransportClientFactory;
 import com.netflix.discovery.shared.transport.jersey.EurekaJerseyClient;
+import com.netflix.discovery.shared.transport.jersey.Jersey1DiscoveryClientOptionalArgs;
+import com.netflix.discovery.shared.transport.jersey.Jersey1TransportClientFactories;
 import com.netflix.discovery.shared.transport.jersey.TransportClientFactories;
 import com.netflix.discovery.util.ThresholdLevelsMetric;
 import com.netflix.servo.annotations.DataSourceType;
 import com.netflix.servo.monitor.Counter;
 import com.netflix.servo.monitor.Monitors;
 import com.netflix.servo.monitor.Stopwatch;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import javax.annotation.Nullable;
+import javax.annotation.PreDestroy;
+import javax.inject.Provider;
+import javax.inject.Singleton;
+import javax.ws.rs.core.Response.Status;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArraySet;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.SynchronousQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
+
+import static com.netflix.discovery.EurekaClientNames.METRIC_REGISTRATION_PREFIX;
+import static com.netflix.discovery.EurekaClientNames.METRIC_REGISTRY_PREFIX;
 
 /**
  * The class that is instrumental for interactions with <tt>Eureka Server</tt>.
@@ -316,6 +314,7 @@ public class DiscoveryClient implements EurekaClient {
         staticClientConfig = clientConfig;
         transportConfig = config.getTransportConfig();
         instanceInfo = myInfo;
+        // 服务名称
         if (myInfo != null) {
             appPathIdentifier = instanceInfo.getAppName() + "/" + instanceInfo.getId();
         } else {
@@ -332,12 +331,14 @@ public class DiscoveryClient implements EurekaClient {
         remoteRegionsToFetch = new AtomicReference<String>(clientConfig.fetchRegistryForRemoteRegions());
         remoteRegionsRef = new AtomicReference<>(remoteRegionsToFetch.get() == null ? null : remoteRegionsToFetch.get().split(","));
 
+        // 定时拉去注册表
         if (config.shouldFetchRegistry()) {
             this.registryStalenessMonitor = new ThresholdLevelsMetric(this, METRIC_REGISTRY_PREFIX + "lastUpdateSec_", new long[]{15L, 30L, 60L, 120L, 240L, 480L});
         } else {
             this.registryStalenessMonitor = ThresholdLevelsMetric.NO_OP_METRIC;
         }
 
+        // 是否将自己注册到eureka
         if (config.shouldRegisterWithEureka()) {
             this.heartbeatStalenessMonitor = new ThresholdLevelsMetric(this, METRIC_REGISTRATION_PREFIX + "lastHeartbeatSec_", new long[]{15L, 30L, 60L, 120L, 240L, 480L});
         } else {
@@ -367,6 +368,7 @@ public class DiscoveryClient implements EurekaClient {
         }
 
         try {
+            // 调度的线程池
             // default size of 2 - 1 each for heartbeat and cacheRefresh
             scheduler = Executors.newScheduledThreadPool(2,
                     new ThreadFactoryBuilder()
@@ -374,6 +376,7 @@ public class DiscoveryClient implements EurekaClient {
                             .setDaemon(true)
                             .build());
 
+            // 心跳检测的线程池
             heartbeatExecutor = new ThreadPoolExecutor(
                     1, clientConfig.getHeartbeatExecutorThreadPoolSize(), 0, TimeUnit.SECONDS,
                     new SynchronousQueue<Runnable>(),
@@ -383,6 +386,7 @@ public class DiscoveryClient implements EurekaClient {
                             .build()
             );  // use direct handoff
 
+            // 缓存刷新线程池
             cacheRefreshExecutor = new ThreadPoolExecutor(
                     1, clientConfig.getCacheRefreshExecutorThreadPoolSize(), 0, TimeUnit.SECONDS,
                     new SynchronousQueue<Runnable>(),
@@ -392,6 +396,7 @@ public class DiscoveryClient implements EurekaClient {
                             .build()
             );  // use direct handoff
 
+            // 支持底层的eureka client跟eureka server进行网络通信的组件
             eurekaTransport = new EurekaTransport();
             scheduleServerEndpointTask(eurekaTransport, args);
 
@@ -409,6 +414,7 @@ public class DiscoveryClient implements EurekaClient {
             throw new RuntimeException("Failed to initialize DiscoveryClient!", e);
         }
 
+        // 抓取注册表 + 从备份中取注册表
         if (clientConfig.shouldFetchRegistry() && !fetchRegistry(false)) {
             fetchRegistryFromBackup();
         }
@@ -417,6 +423,7 @@ public class DiscoveryClient implements EurekaClient {
         if (this.preRegistrationHandler != null) {
             this.preRegistrationHandler.beforeRegistration();
         }
+        // 初始化调度任务 每隔一定时间（30s）定时拉去注册表信息
         initScheduledTasks();
 
         try {
@@ -804,6 +811,7 @@ public class DiscoveryClient implements EurekaClient {
         logger.info(PREFIX + appPathIdentifier + ": registering service...");
         EurekaHttpResponse<Void> httpResponse;
         try {
+            // 注册服务信息
             httpResponse = eurekaTransport.registrationClient.register(instanceInfo);
         } catch (Exception e) {
             logger.warn("{} - registration failed {}", PREFIX + appPathIdentifier, e.getMessage(), e);
@@ -938,8 +946,10 @@ public class DiscoveryClient implements EurekaClient {
                 logger.info("Registered Applications size is zero : {}",
                         (applications.getRegisteredApplications().size() == 0));
                 logger.info("Application version is -1: {}", (applications.getVersion() == -1));
+                // 第一次拉去全量
                 getAndStoreFullRegistry();
             } else {
+                // 后面的取增量
                 getAndUpdateDelta(applications);
             }
             applications.setAppsHashCode(applications.getReconcileHashCode());
@@ -1239,6 +1249,7 @@ public class DiscoveryClient implements EurekaClient {
             // registry cache refresh timer
             int registryFetchIntervalSeconds = clientConfig.getRegistryFetchIntervalSeconds();
             int expBackOffBound = clientConfig.getCacheRefreshExecutorExponentialBackOffBound();
+            // 拉取注册表信息的定时任务
             scheduler.schedule(
                     new TimedSupervisorTask(
                             "cacheRefresh",
@@ -1257,6 +1268,7 @@ public class DiscoveryClient implements EurekaClient {
             int expBackOffBound = clientConfig.getHeartbeatExecutorExponentialBackOffBound();
             logger.info("Starting heartbeat executor: " + "renew interval is: " + renewalIntervalInSecs);
 
+            // 心跳检测
             // Heartbeat timer
             scheduler.schedule(
                     new TimedSupervisorTask(
@@ -1270,6 +1282,7 @@ public class DiscoveryClient implements EurekaClient {
                     ),
                     renewalIntervalInSecs, TimeUnit.SECONDS);
 
+            // 实例复制器 即：注册任务
             // InstanceInfo replicator
             instanceInfoReplicator = new InstanceInfoReplicator(
                     this,

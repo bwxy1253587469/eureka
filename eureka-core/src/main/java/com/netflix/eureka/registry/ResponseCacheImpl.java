@@ -16,21 +16,6 @@
 
 package com.netflix.eureka.registry;
 
-import javax.annotation.Nullable;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Date;
-import java.util.List;
-import java.util.TimerTask;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.zip.GZIPOutputStream;
-
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Supplier;
 import com.google.common.cache.CacheBuilder;
@@ -56,6 +41,21 @@ import com.netflix.servo.monitor.Stopwatch;
 import com.netflix.servo.monitor.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import javax.annotation.Nullable;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Date;
+import java.util.List;
+import java.util.TimerTask;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.zip.GZIPOutputStream;
 
 /**
  * The class that is responsible for caching registry information that will be
@@ -129,6 +129,7 @@ public class ResponseCacheImpl implements ResponseCache {
         long responseCacheUpdateIntervalMs = serverConfig.getResponseCacheUpdateIntervalMs();
         this.readWriteCacheMap =
                 CacheBuilder.newBuilder().initialCapacity(1000)
+                        // 定时过期
                         .expireAfterWrite(serverConfig.getResponseCacheAutoExpirationInSeconds(), TimeUnit.SECONDS)
                         .removalListener(new RemovalListener<Key, Value>() {
                             @Override
@@ -152,6 +153,7 @@ public class ResponseCacheImpl implements ResponseCache {
                             }
                         });
 
+        // 被动过期 定时任务（30s） 比对只读缓存和读写缓存 将新缓存写入只读缓存
         if (shouldUseReadOnlyResponseCache) {
             timer.schedule(getCacheUpdateTask(),
                     new Date(((System.currentTimeMillis() / responseCacheUpdateIntervalMs) * responseCacheUpdateIntervalMs)
@@ -204,6 +206,7 @@ public class ResponseCacheImpl implements ResponseCache {
      * @return payload which contains information about the applications.
      */
     public String get(final Key key) {
+        // shouldUseReadOnlyResponseCache 默认true 默认使用只读缓存
         return get(key, shouldUseReadOnlyResponseCache);
     }
 
@@ -346,9 +349,11 @@ public class ResponseCacheImpl implements ResponseCache {
         try {
             if (useReadOnlyCache) {
                 final Value currentPayload = readOnlyCacheMap.get(key);
+                // 有只读缓存 返回
                 if (currentPayload != null) {
                     payload = currentPayload;
                 } else {
+                    // 没有只读缓存 从读写缓存中获取 并放入只读缓存
                     payload = readWriteCacheMap.get(key);
                     readOnlyCacheMap.put(key, payload);
                 }

@@ -16,6 +16,24 @@
 
 package com.netflix.eureka.registry;
 
+import com.google.common.cache.CacheBuilder;
+import com.netflix.appinfo.InstanceInfo;
+import com.netflix.appinfo.InstanceInfo.ActionType;
+import com.netflix.appinfo.InstanceInfo.InstanceStatus;
+import com.netflix.appinfo.LeaseInfo;
+import com.netflix.discovery.EurekaClientConfig;
+import com.netflix.discovery.shared.Application;
+import com.netflix.discovery.shared.Applications;
+import com.netflix.discovery.shared.Pair;
+import com.netflix.eureka.EurekaServerConfig;
+import com.netflix.eureka.lease.Lease;
+import com.netflix.eureka.registry.rule.InstanceStatusOverrideRule;
+import com.netflix.eureka.resources.ServerCodecs;
+import com.netflix.eureka.util.MeasuredRate;
+import com.netflix.servo.annotations.DataSourceType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import javax.annotation.Nullable;
 import java.net.MalformedURLException;
 import java.net.URL;
@@ -39,24 +57,6 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
-
-import com.google.common.cache.CacheBuilder;
-import com.netflix.appinfo.InstanceInfo;
-import com.netflix.appinfo.InstanceInfo.ActionType;
-import com.netflix.appinfo.InstanceInfo.InstanceStatus;
-import com.netflix.appinfo.LeaseInfo;
-import com.netflix.discovery.EurekaClientConfig;
-import com.netflix.discovery.shared.Application;
-import com.netflix.discovery.shared.Applications;
-import com.netflix.discovery.shared.Pair;
-import com.netflix.eureka.EurekaServerConfig;
-import com.netflix.eureka.lease.Lease;
-import com.netflix.eureka.registry.rule.InstanceStatusOverrideRule;
-import com.netflix.eureka.resources.ServerCodecs;
-import com.netflix.eureka.util.MeasuredRate;
-import com.netflix.servo.annotations.DataSourceType;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import static com.netflix.eureka.util.EurekaMonitors.*;
 
@@ -116,7 +116,9 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
         this.serverConfig = serverConfig;
         this.clientConfig = clientConfig;
         this.serverCodecs = serverCodecs;
+        // 最近被摘除的实例
         this.recentCanceledQueue = new CircularQueue<Pair<Long, String>>(1000);
+        // 最近注册的队列
         this.recentRegisteredQueue = new CircularQueue<Pair<Long, String>>(1000);
 
         this.renewsLastMin = new MeasuredRate(1000 * 60 * 1);
@@ -266,6 +268,7 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
             registrant.setActionType(ActionType.ADDED);
             recentlyChangedQueue.add(new RecentlyChangedItem(lease));
             registrant.setLastUpdatedTimestamp();
+            // 过期缓存
             invalidateCache(registrant.getAppName(), registrant.getVIPAddress(), registrant.getSecureVipAddress());
             logger.info("Registered instance {}/{} with status {} (replication={})",
                     registrant.getAppName(), registrant.getId(), registrant.getStatus(), isReplication);

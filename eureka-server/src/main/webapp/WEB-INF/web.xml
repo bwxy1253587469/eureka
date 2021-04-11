@@ -5,23 +5,28 @@
          xsi:schemaLocation="http://java.sun.com/xml/ns/javaee
 	http://java.sun.com/xml/ns/javaee/web-app_2_5.xsd">
   <listener>
+    <!--    最重要的入口 初始化逻辑-->
     <listener-class>com.netflix.eureka.EurekaBootStrap</listener-class>
   </listener>
 
   <filter>
+<!--    状态过滤器-->
     <filter-name>statusFilter</filter-name>
     <filter-class>com.netflix.eureka.StatusFilter</filter-class>
   </filter>
 
   <filter>
+<!--    认证相关-->
     <filter-name>requestAuthFilter</filter-name>
     <filter-class>com.netflix.eureka.ServerRequestAuthFilter</filter-class>
   </filter>
   <filter>
+<!--    限流相关 重点 看看 注册中心怎么做的限流-->
     <filter-name>rateLimitingFilter</filter-name>
     <filter-class>com.netflix.eureka.RateLimitingFilter</filter-class>
   </filter>
   <filter>
+<!--    压缩算法-->
     <filter-name>gzipEncodingEnforcingFilter</filter-name>
     <filter-class>com.netflix.eureka.GzipEncodingEnforcingFilter</filter-class>
   </filter>

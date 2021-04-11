@@ -16,6 +16,19 @@
 
 package com.netflix.eureka.resources;
 
+import com.netflix.appinfo.EurekaAccept;
+import com.netflix.eureka.EurekaServerConfig;
+import com.netflix.eureka.EurekaServerContext;
+import com.netflix.eureka.EurekaServerContextHolder;
+import com.netflix.eureka.Version;
+import com.netflix.eureka.registry.AbstractInstanceRegistry;
+import com.netflix.eureka.registry.Key;
+import com.netflix.eureka.registry.Key.KeyType;
+import com.netflix.eureka.registry.PeerAwareInstanceRegistry;
+import com.netflix.eureka.registry.ResponseCache;
+import com.netflix.eureka.registry.ResponseCacheImpl;
+import com.netflix.eureka.util.EurekaMonitors;
+
 import javax.annotation.Nullable;
 import javax.inject.Inject;
 import javax.ws.rs.GET;
@@ -30,19 +43,6 @@ import javax.ws.rs.core.Response;
 import javax.ws.rs.core.Response.Status;
 import javax.ws.rs.core.UriInfo;
 import java.util.Arrays;
-
-import com.netflix.appinfo.EurekaAccept;
-import com.netflix.eureka.EurekaServerContext;
-import com.netflix.eureka.EurekaServerContextHolder;
-import com.netflix.eureka.registry.AbstractInstanceRegistry;
-import com.netflix.eureka.EurekaServerConfig;
-import com.netflix.eureka.registry.PeerAwareInstanceRegistry;
-import com.netflix.eureka.Version;
-import com.netflix.eureka.registry.ResponseCache;
-import com.netflix.eureka.registry.Key.KeyType;
-import com.netflix.eureka.registry.ResponseCacheImpl;
-import com.netflix.eureka.registry.Key;
-import com.netflix.eureka.util.EurekaMonitors;
 
 /**
  * A <em>jersey</em> resource that handles request related to all
@@ -141,6 +141,7 @@ public class ApplicationsResource {
             returnMediaType = MediaType.APPLICATION_XML;
         }
 
+        // 缓存key
         Key cacheKey = new Key(Key.EntityType.Application,
                 ResponseCacheImpl.ALL_APPS,
                 keyType, CurrentRequestVersion.get(), EurekaAccept.fromString(eurekaAccept), regions

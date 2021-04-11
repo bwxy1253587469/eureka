@@ -1,9 +1,5 @@
 package com.netflix.appinfo.providers;
 
-import javax.inject.Singleton;
-import javax.inject.Provider;
-import java.util.Map;
-
 import com.google.inject.Inject;
 import com.netflix.appinfo.DataCenterInfo;
 import com.netflix.appinfo.EurekaInstanceConfig;
@@ -15,6 +11,10 @@ import com.netflix.appinfo.RefreshableInstanceConfig;
 import com.netflix.appinfo.UniqueIdentifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import javax.inject.Provider;
+import javax.inject.Singleton;
+import java.util.Map;
 
 /**
  * InstanceInfo provider that constructs the InstanceInfo this this instance using
@@ -44,6 +44,7 @@ public class EurekaConfigBasedInstanceInfoProvider implements Provider<InstanceI
 
     @Override
     public synchronized InstanceInfo get() {
+        // 构造器模式 创建InstanceInfo
         if (instanceInfo == null) {
             // Build the lease information to be passed to the server based on config
             LeaseInfo.Builder leaseInfoBuilder = LeaseInfo.Builder.newBuilder()
